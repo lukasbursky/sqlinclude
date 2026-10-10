@@ -1,0 +1,4 @@
+<stdin>
+├── sub/users.sql
+│   └── shared/common.sql
+└── orders.sql
