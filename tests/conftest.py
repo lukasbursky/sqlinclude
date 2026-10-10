@@ -36,7 +36,7 @@ def run_cli(monkeypatch):
         *,
         cwd: Path = FIXTURES,
         stdin_text: str | None = None,
-        stdout_encoding: str = "utf-8",
+        initial_encoding: str = "utf-8",
         tty: bool = False,
         edit_buffer: Callable[[str, str], str | None] | None = None,
     ):
@@ -46,7 +46,7 @@ def run_cli(monkeypatch):
             monkeypatch.setattr(cli, "edit_buffer", edit_buffer)
 
         out_buf = io.BytesIO()
-        stdout = io.TextIOWrapper(out_buf, encoding=stdout_encoding, newline="")
+        stdout = io.TextIOWrapper(out_buf, encoding=initial_encoding, newline="")
         stderr = io.StringIO()
         monkeypatch.setattr(sys, "stdout", stdout)
         monkeypatch.setattr(sys, "stderr", stderr)
@@ -55,6 +55,6 @@ def run_cli(monkeypatch):
 
         rc = cli.main(["sqlinclude", *args])
         stdout.flush()
-        return rc, out_buf.getvalue().decode(stdout_encoding), stderr.getvalue()
+        return rc, out_buf.getvalue().decode("utf-8"), stderr.getvalue()
 
     return _run

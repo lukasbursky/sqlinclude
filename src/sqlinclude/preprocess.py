@@ -71,7 +71,7 @@ def walk(
                 return True
 
             try:
-                with open(canon, encoding="utf-8") as fh:
+                with open(canon, encoding="utf-8-sig") as fh:
                     sub = fh.read()
             except OSError as exc:
                 sys.stderr.write(f"sqlinclude: {path}: {exc}\n")

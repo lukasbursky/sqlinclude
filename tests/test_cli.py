@@ -67,15 +67,12 @@ def test_tree_no_includes(run_cli, expected_dir):
     assert out == read(expected_dir / "tree_orders.txt")
 
 
-def test_tree_ascii_fallback_on_narrow_stdout(run_cli):
-    rc, out, _ = run_cli(["--tree", "ok_main.sql"], stdout_encoding="cp1252")
+def test_tree_unicode_survives_narrow_stdout(run_cli, expected_dir):
+    # A cp1252 stdout cannot encode the box-drawing glyphs; forcing UTF-8 must
+    # keep the Unicode tree intact instead of crashing or degrading to ASCII.
+    rc, out, _ = run_cli(["--tree", "ok_main.sql"], initial_encoding="cp1252")
     assert rc == 0
-    assert out == (
-        "ok_main.sql\n"
-        "|-- sub/users.sql\n"
-        "|   `-- shared/common.sql\n"
-        "`-- orders.sql\n"
-    )
+    assert out == read(expected_dir / "tree_main.txt")
 
 
 def test_tree_explicit_ascii(run_cli):
@@ -121,3 +118,38 @@ def test_no_edit_skips_editor(run_cli, expected_dir):
     assert rc == 0
     assert out == read(expected_dir / "noedit.sql")
     assert err == ""
+
+
+def test_non_ascii_passthrough_survives_narrow_stdout(tmp_path, run_cli):
+    (tmp_path / "q.sql").write_text("select '▲' as arrow;\n", encoding="utf-8")
+    rc, out, _ = run_cli(["q.sql"], cwd=tmp_path, initial_encoding="cp1250")
+    assert rc == 0
+    assert out == "select '▲' as arrow;\n"
+
+
+def test_bom_stripped(tmp_path, run_cli):
+    (tmp_path / "bom.sql").write_text("select 1;\n", encoding="utf-8-sig")
+    rc, out, _ = run_cli(["bom.sql"], cwd=tmp_path)
+    assert rc == 0
+    assert "\ufeff" not in out
+    assert out == "select 1;\n"
+
+
+def test_non_ascii_passthrough_subprocess(tmp_path):
+    # Reproduces the Windows failure: a piped stdout whose encoding is the ANSI
+    # code page cannot encode the ▲ literal in the source.
+    import os
+    import subprocess
+    import sys
+
+    src = tmp_path / "q.sql"
+    src.write_text("select '▲' as arrow;\n", encoding="utf-8")
+    env = {**os.environ, "PYTHONIOENCODING": "cp1250"}
+    proc = subprocess.run(
+        [sys.executable, "-m", "sqlinclude", str(src)],
+        capture_output=True,
+        env=env,
+    )
+    assert proc.returncode == 0, proc.stderr.decode("utf-8", "replace")
+    assert proc.stdout.decode("utf-8") == "select '▲' as arrow;\n"
+

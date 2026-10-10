@@ -17,7 +17,6 @@ from .editor import (
     undefined_count,
 )
 from .preprocess import (
-    ORIGIN_UNDEFINED,
     STDIN_NAME,
     collect_tree,
     collect_vars,
@@ -26,13 +25,23 @@ from .preprocess import (
 )
 
 
-def _stdout_can_encode(text: str) -> bool:
-    enc = getattr(sys.stdout, "encoding", None) or "ascii"
+def _force_utf8(stream) -> None:
+    """Make a standard stream use UTF-8, when it supports reconfiguring.
+
+    sqlinclude is a UTF-8-in/UTF-8-out filter; forcing the encoding keeps a
+    Windows console, pipe, or file redirect from choking on non-ASCII SQL (the
+    ANSI code page cannot encode characters such as the box-drawing glyphs used
+    in --tree, or non-ASCII literals in a SQL query). No-op on Linux, where the
+    streams are already UTF-8, and on replaced streams that lack
+    ``reconfigure``.
+    """
+    reconfigure = getattr(stream, "reconfigure", None)
+    if reconfigure is None:
+        return
     try:
-        text.encode(enc)
-    except (UnicodeEncodeError, LookupError):
-        return False
-    return True
+        reconfigure(encoding="utf-8")
+    except (ValueError, OSError, LookupError):
+        pass
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -134,6 +143,9 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     if argv is None:
         argv = sys.argv
+    _force_utf8(sys.stdin)
+    _force_utf8(sys.stdout)
+    _force_utf8(sys.stderr)
     args = build_parser().parse_args(argv[1:])
 
     cli_vars: dict[str, str] = {}
@@ -152,7 +164,7 @@ def main(argv: list[str] | None = None) -> int:
         top = None
     else:
         try:
-            with open(args.file, encoding="utf-8") as fh:
+            with open(args.file, encoding="utf-8-sig") as fh:
                 source = fh.read()
         except OSError as exc:
             sys.stderr.write(f"sqlinclude: {args.file}: {exc}\n")
@@ -171,8 +183,7 @@ def main(argv: list[str] | None = None) -> int:
         root = collect_tree(source, top)
         if root is None:
             return 1
-        ascii_only = args.ascii or not _stdout_can_encode("└──")
-        sys.stdout.write(render_tree(root, ascii_only=ascii_only))
+        sys.stdout.write(render_tree(root, ascii_only=args.ascii))
         return 0
 
     collected = collect_vars(source, top, cli_vars)

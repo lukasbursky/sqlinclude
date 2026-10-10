@@ -52,6 +52,14 @@ Each include block is bracketed with `-- #line N "file"` markers (with forward
 slashes on every platform) so error messages from downstream tools point at the
 originating source file and line. Use `-n`/`--no-markers` to suppress them.
 
+## Encoding
+
+Sources are read as UTF-8 (a leading byte-order mark is ignored), and stdin,
+stdout, and stderr are forced to UTF-8. Queries containing non-ASCII characters
+still work when the output is piped or redirected on Windows, where the console
+code page (e.g. cp1250) cannot represent them. Use `--ascii` if your terminal
+cannot render the Unicode box characters in `--tree`.
+
 ## Example
 
 `analysis.sql`:
